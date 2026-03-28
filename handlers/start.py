@@ -32,7 +32,7 @@ async def send_bot_msg(target: Message, key: str, reply_markup=None, edit: bool 
 
     file_id = msg_data.get("media_file_id") if msg_data else None
     content_type = msg_data.get("content_type", "text") if msg_data else "text"
-    has_media = file_id and content_type in ("photo", "video", "voice")
+    has_media = file_id and content_type in ("photo", "video", "voice", "document")
 
     if edit and not has_media:
         if text:
@@ -51,6 +51,8 @@ async def send_bot_msg(target: Message, key: str, reply_markup=None, edit: bool 
         await target.answer_video(file_id, caption=text or None, reply_markup=reply_markup)
     elif content_type == "voice" and file_id:
         await target.answer_voice(file_id, reply_markup=reply_markup)
+    elif content_type == "document" and file_id:
+        await target.answer_document(file_id, caption=text or None, reply_markup=reply_markup)
     elif text:
         await target.answer(text, reply_markup=reply_markup)
 

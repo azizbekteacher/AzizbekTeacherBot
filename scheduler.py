@@ -57,6 +57,12 @@ async def send_scheduled_message(bot: Bot, scheduled: dict):
         elif text:
             await bot.send_message(chat_id, text, parse_mode="HTML")
 
+    elif content_type == "document":
+        if file_id:
+            await bot.send_document(chat_id, file_id, caption=text or None, parse_mode="HTML")
+        elif text:
+            await bot.send_message(chat_id, text, parse_mode="HTML")
+
     else:
         if text:
             # followup_consult yuborilganda "Konsultatsiya olish" tugmasini ko'rsatish
