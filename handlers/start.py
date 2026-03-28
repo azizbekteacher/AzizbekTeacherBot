@@ -13,7 +13,7 @@ from db import (
     save_user, get_user_by_telegram_id, is_admin,
     schedule_followup_messages, save_survey_answers, get_survey_answers,
     get_msg, get_msg_text, get_user_active_booking, cancel_booking,
-    check_phone_exists, check_username_exists, is_followup_consult_sent,
+    check_phone_exists, check_username_exists,
     save_user_extra_phone, get_admin_ids, get_start_messages,
 )
 
@@ -67,12 +67,8 @@ def main_menu_kb(user_id: int) -> ReplyKeyboardMarkup | ReplyKeyboardRemove:
             input_field_placeholder="Buyruq yoki tugmani tanlang...",
         )
 
-    # Faqat followup_consult yuborilgandan keyin tugma ko'rinsin
-    if is_followup_consult_sent(user_id):
-        buttons = [[KeyboardButton(text="Konsultatsiya olish")]]
-        return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
-
-    return ReplyKeyboardRemove()
+    buttons = [[KeyboardButton(text="Konsultatsiya olish")]]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 
 class Registration(StatesGroup):
@@ -121,11 +117,20 @@ async def cmd_start(message: Message, state: FSMContext):
     schedule_followup_messages(message.from_user.id)
 
     # Admin paneldan qo'shilgan start xabarlarini yuborish
-    for msg in get_start_messages():
+    start_msgs = get_start_messages()
+    for i, msg in enumerate(start_msgs):
         try:
-            await send_bot_msg(message, msg["key"], video_link=VIDEO_LINK)
+            is_last = i == len(start_msgs) - 1
+            rm = main_menu_kb(message.from_user.id) if is_last else None
+            await send_bot_msg(message, msg["key"], reply_markup=rm, video_link=VIDEO_LINK)
         except Exception:
             pass
+
+    if not start_msgs:
+        await message.answer(
+            "Quyidagi tugmadan foydalaning:",
+            reply_markup=main_menu_kb(message.from_user.id),
+        )
 
 
 # --- 1. Ism ---
@@ -508,14 +513,6 @@ async def process_user_reply(message: Message, state: FSMContext):
 @router.message(F.text == "Konsultatsiya olish")
 async def cmd_consultation(message: Message, state: FSMContext):
     if is_admin(message.from_user.id):
-        return
-
-    # Followup consult hali yuborilmagan — tugma ko'rinmasligi kerak
-    if not is_followup_consult_sent(message.from_user.id):
-        await message.answer(
-            "Konsultatsiya olish imkoniyati tez orada ochiladi. Iltimos, biroz kuting!",
-            reply_markup=ReplyKeyboardRemove(),
-        )
         return
 
     user = get_user_by_telegram_id(message.from_user.id)
