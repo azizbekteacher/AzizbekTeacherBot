@@ -102,15 +102,14 @@ def message_view_keyboard(msg: dict) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="Matnni o'zgartirish", callback_data=f"msgedit:text:{msg['key']}")],
         [InlineKeyboardButton(text="Media qo'shish/o'zgartirish", callback_data=f"msgedit:media:{msg['key']}")],
     ]
-    if msg["category"] in ("followup", "start"):
-        if msg["category"] == "followup":
-            buttons.append([InlineKeyboardButton(
-                text="Vaqtni o'zgartirish", callback_data=f"msgedit:delay:{msg['key']}"
-            )])
-        active_text = "O'chirish" if msg["is_active"] else "Yoqish"
+    if msg["category"] == "followup":
         buttons.append([InlineKeyboardButton(
-            text=active_text, callback_data=f"msgedit:toggle:{msg['key']}"
+            text="Vaqtni o'zgartirish", callback_data=f"msgedit:delay:{msg['key']}"
         )])
+    active_text = "O'chirish" if msg["is_active"] else "Yoqish"
+    buttons.append([InlineKeyboardButton(
+        text=active_text, callback_data=f"msgedit:toggle:{msg['key']}"
+    )])
     buttons.append([InlineKeyboardButton(text="Orqaga", callback_data=f"msgcat:{msg['category']}")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -143,8 +142,8 @@ def format_message_view(msg: dict) -> str:
         else:
             delay_text = f"{delay} daqiqa"
         lines.append(f"Delay: {delay_text}")
-        active_label = "ha" if msg["is_active"] else "yo'q"
-        lines.append(f"Faol: {active_label}")
+    active_label = "ha" if msg["is_active"] else "yo'q"
+    lines.append(f"Faol: {active_label}")
 
     return "\n".join(lines)
 
