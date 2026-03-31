@@ -177,15 +177,9 @@ async def finish_registration(target, state: FSMContext, user_telegram_id: int):
         await send_bot_msg(target, "reg_complete_yes",
                            reply_markup=main_menu_kb(user_telegram_id))
     else:
-        inline_kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Videoni ko'rish", url=VIDEO_LINK)]
-        ])
-        await send_bot_msg(target, "start_welcome",
-                           reply_markup=inline_kb, video_link=VIDEO_LINK)
-        await target.answer(
-            "Videoni ko'rib bo'lganingizdan so'ng konsultatsiya olishingiz mumkin:",
-            reply_markup=main_menu_kb(user_telegram_id),
-        )
+        await send_bot_msg(target, "reg_complete_no",
+                           reply_markup=main_menu_kb(user_telegram_id),
+                           video_link=VIDEO_LINK)
 
 
 # --- /start ---
@@ -573,15 +567,9 @@ async def cmd_consultation(message: Message, state: FSMContext):
         )
         return
 
-    # Aktiv booking yo'q — kun tanlash
-    from handlers.consultation import Consultation, build_days_keyboard
-    await state.set_state(Consultation.select_day)
-    kb = build_days_keyboard()
-    if not kb.inline_keyboard:
-        await send_bot_msg(message, "no_days_available")
-        await state.clear()
-        return
-    await send_bot_msg(message, "consult_day_prompt", reply_markup=kb)
+    # Aktiv booking yo'q — muvaffaqiyatli ro'yxatdan o'tganlik xabari
+    await send_bot_msg(message, "reg_complete_yes",
+                       reply_markup=main_menu_kb(message.from_user.id))
 
 
 # --- Admin panel ---

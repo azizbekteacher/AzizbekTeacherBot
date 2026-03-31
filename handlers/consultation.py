@@ -109,14 +109,8 @@ async def on_consultation_start(callback: CallbackQuery, state: FSMContext):
         return
 
     from handlers.start import send_bot_msg
-    await state.set_state(Consultation.watched_video)
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="Ha", callback_data="video_yes"),
-            InlineKeyboardButton(text="Yo'q", callback_data="video_no"),
-        ]
-    ])
-    await send_bot_msg(callback.message, "consult_video_question", reply_markup=kb, edit=True)
+    # Konsultatsiya vaqtini belgilash yashirilgan — muvaffaqiyatli ro'yxatdan o'tganlik xabari
+    await send_bot_msg(callback.message, "reg_complete_yes", edit=True)
     await callback.answer()
 
 

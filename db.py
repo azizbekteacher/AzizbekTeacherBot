@@ -132,10 +132,10 @@ DEFAULT_MESSAGES = [
     ("reg_video_prompt", "registration", "Video savoli", "text",
      "Videodarsni ko'rdingizmi?", None, None),
     ("reg_complete_yes", "registration", "Tugallash (Ha)", "text",
-     "Siz ro'yxatdan muvaffaqiyatli o'tdingiz!\n\nVideo darsni ko'rganingiz uchun rahmat! Endi bepul konsultatsiya vaqtingizni tanlang:",
+     "Siz ro'yxatdan muvaffaqiyatli o'tdingiz!\n\nVideo darsni ko'rganingiz uchun rahmat! Tez orada siz bilan bog'lanamiz.",
      None, None),
     ("reg_complete_no", "registration", "Tugallash (Yo'q)", "text",
-     "Siz ro'yxatdan muvaffaqiyatli o'tdingiz!\n\nMarhamat, videodarsni ko'rib chiqing:\n\n<a href=\"{video_link}\">Darslikni ko'rish</a>",
+     "Siz ro'yxatdan muvaffaqiyatli o'tdingiz!\n\nMarhamat, videodarsni ko'rib chiqing:\n\n<a href=\"{video_link}\">Darslikni ko'rish</a>\n\nTez orada siz bilan bog'lanamiz.",
      None, None),
     # --- followup xabarlar admin paneldan qo'shiladi ---
     # --- consultation ---
