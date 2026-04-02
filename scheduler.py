@@ -65,9 +65,9 @@ async def send_scheduled_message(bot: Bot, scheduled: dict):
 
     else:
         if text:
-            # followup_consult yuborilganda "Konsultatsiya olish" tugmasini ko'rsatish
+            # followup xabarlarda "Konsultatsiya olish" tugmasini ko'rsatish
             reply_markup = None
-            if msg_type == "followup_consult":
+            if msg_type in ("followup_consult", "start_followup"):
                 reply_markup = ReplyKeyboardMarkup(
                     keyboard=[[KeyboardButton(text="Konsultatsiya olish")]],
                     resize_keyboard=True,

@@ -12,9 +12,10 @@ from config import VIDEO_LINK
 from db import (
     save_user, get_user_by_telegram_id, is_admin,
     schedule_followup_messages, save_survey_answers, get_survey_answers,
-    get_msg, get_msg_text, get_user_active_booking, cancel_booking,
+    get_msg, get_msg_text, get_user_active_booking,
     check_phone_exists, check_username_exists,
-    save_user_extra_phone, get_admin_ids, get_start_messages,
+    save_user_extra_phone, get_admin_ids,
+    schedule_start_followup, cancel_pending_followups,
 )
 
 router = Router()
@@ -170,6 +171,8 @@ async def finish_registration(target, state: FSMContext, user_telegram_id: int):
         "budget": data.get("budget"),
         "video_watched": data.get("video_watched"),
     })
+    # Konsultatsiyaga yozildi — 30 daqiqalik followup xabarni bekor qilish
+    cancel_pending_followups(user_telegram_id)
     schedule_followup_messages(user_telegram_id)
 
     video_watched = data.get("video_watched", "")
@@ -180,6 +183,23 @@ async def finish_registration(target, state: FSMContext, user_telegram_id: int):
         await send_bot_msg(target, "reg_complete_no",
                            reply_markup=main_menu_kb(user_telegram_id),
                            video_link=VIDEO_LINK)
+
+    # Adminlarga yangi konsultatsiya haqida xabar
+    full_name = data.get("full_name", "Noma'lum")
+    phone = data.get("phone", "")
+    extra_phone = data.get("extra_phone")
+    extra_line = f"\nQo'shimcha tel: {extra_phone}" if extra_phone else ""
+    admin_text = (
+        f"<b>Yangi so'rovnoma to'ldirildi!</b>\n\n"
+        f"Ism: {full_name}\n"
+        f"Tel: {phone}{extra_line}\n"
+        f"Telegram: <code>{user_telegram_id}</code>"
+    )
+    for admin_id in get_admin_ids():
+        try:
+            await target.bot.send_message(admin_id, admin_text)
+        except Exception:
+            pass
 
 
 # --- /start ---
@@ -203,27 +223,15 @@ async def cmd_start(message: Message, state: FSMContext):
                            full_name=user['full_name'])
         return
 
-    # Yangi user — saqlash + start xabarlarini yuborish
+    # Yangi user — faqat "Konsultatsiya olish" tugmasini ko'rsatish
     await state.clear()
-    tg_name = message.from_user.full_name or "Noma'lum"
-    save_user(message.from_user.id, tg_name, "")
-    schedule_followup_messages(message.from_user.id)
-
-    # Admin paneldan qo'shilgan start xabarlarini yuborish
-    start_msgs = get_start_messages()
-    for i, msg in enumerate(start_msgs):
-        try:
-            is_last = i == len(start_msgs) - 1
-            rm = main_menu_kb(message.from_user.id) if is_last else None
-            await send_bot_msg(message, msg["key"], reply_markup=rm, video_link=VIDEO_LINK)
-        except Exception:
-            pass
-
-    if not start_msgs:
-        await message.answer(
-            "Quyidagi tugmadan foydalaning:",
-            reply_markup=main_menu_kb(message.from_user.id),
-        )
+    # 30 daqiqadan keyin followup xabar yuborish uchun schedule qilish
+    schedule_start_followup(message.from_user.id)
+    await message.answer(
+        "Assalomu alaykum! Botga xush kelibsiz!\n\n"
+        "Konsultatsiya olish uchun quyidagi tugmani bosing:",
+        reply_markup=main_menu_kb(message.from_user.id),
+    )
 
 
 # --- 1. Ism ---
@@ -482,7 +490,7 @@ async def on_survey_fill(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Siz allaqachon so'rovnomani to'ldirgansiz!", show_alert=True)
         return
     await state.set_state(Registration.waiting_for_name)
-    await send_bot_msg(callback.message, "reg_name_prompt", reply_markup=ReplyKeyboardRemove())
+    await send_bot_msg(callback.message, "reg_welcome", reply_markup=ReplyKeyboardRemove())
     await callback.answer()
 
 
@@ -542,11 +550,11 @@ async def cmd_consultation(message: Message, state: FSMContext):
 
     user = get_user_by_telegram_id(message.from_user.id)
 
-    # So'rovnoma to'ldirilmagan — avval so'rovnomani boshlash
+    # So'rovnoma to'ldirilmagan — welcome matn + ism so'rash
     survey = get_survey_answers(message.from_user.id) if user else None
     if not survey:
         await state.set_state(Registration.waiting_for_name)
-        await send_bot_msg(message, "reg_name_prompt", reply_markup=ReplyKeyboardRemove())
+        await send_bot_msg(message, "reg_welcome", reply_markup=ReplyKeyboardRemove())
         return
 
     # So'rovnoma to'ldirilgan — aktiv booking bormi?

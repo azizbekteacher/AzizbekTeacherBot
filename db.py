@@ -137,6 +137,10 @@ DEFAULT_MESSAGES = [
     ("reg_complete_no", "registration", "Tugallash (Yo'q)", "text",
      "Siz ro'yxatdan muvaffaqiyatli o'tdingiz!\n\nMarhamat, videodarsni ko'rib chiqing:\n\n<a href=\"{video_link}\">Darslikni ko'rish</a>\n\nTez orada siz bilan bog'lanamiz.",
      None, None),
+    ("start_followup", "general", "Start followup (30 daq)", "text",
+     "Siz hali konsultatsiyaga yozilmadingiz.\n\n"
+     "Bepul konsultatsiya olish uchun \"Konsultatsiya olish\" tugmasini bosing!",
+     None, 30),
     # --- followup xabarlar admin paneldan qo'shiladi ---
     # --- consultation ---
     ("consult_video_question", "consultation", "Video savoli", "text",
@@ -516,6 +520,38 @@ def schedule_followup_messages(telegram_id: int):
             "INSERT INTO scheduled_messages (telegram_id, message_type, send_at) VALUES (?, ?, ?)",
             (telegram_id, fu["key"], send_at.strftime("%Y-%m-%d %H:%M:%S")),
         )
+    conn.commit()
+    conn.close()
+
+
+def schedule_start_followup(telegram_id: int):
+    """Start bosilganda 30 daqiqalik followup xabar rejaga olish."""
+    conn = get_connection()
+    # Agar allaqachon start_followup rejaga olingan bo'lsa — qayta qo'shmaslik
+    existing = conn.execute(
+        "SELECT 1 FROM scheduled_messages WHERE telegram_id = ? AND message_type = 'start_followup' AND sent = 0",
+        (telegram_id,),
+    ).fetchone()
+    if existing:
+        conn.close()
+        return
+    now = datetime.now()
+    send_at = now + timedelta(minutes=30)
+    conn.execute(
+        "INSERT INTO scheduled_messages (telegram_id, message_type, send_at) VALUES (?, ?, ?)",
+        (telegram_id, "start_followup", send_at.strftime("%Y-%m-%d %H:%M:%S")),
+    )
+    conn.commit()
+    conn.close()
+
+
+def cancel_pending_followups(telegram_id: int):
+    """Yuborilmagan start_followup xabarlarni bekor qilish."""
+    conn = get_connection()
+    conn.execute(
+        "DELETE FROM scheduled_messages WHERE telegram_id = ? AND message_type = 'start_followup' AND sent = 0",
+        (telegram_id,),
+    )
     conn.commit()
     conn.close()
 
