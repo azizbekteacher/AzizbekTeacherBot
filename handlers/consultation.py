@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardBut
 
 from config import VIDEO_LINK
 from db import get_booked_slots, create_booking, get_booking_with_user, get_user_by_telegram_id, get_admin_ids, get_msg_text, cancel_booking
+from google_sheets import update_consultation
 
 router = Router()
 
@@ -186,6 +187,9 @@ async def on_time_selected(callback: CallbackQuery, state: FSMContext):
     await send_bot_msg(callback.message, "consult_success", edit=True,
                        day_label=day_label, time_slot=time_slot)
     await callback.answer()
+
+    # Google Sheets da konsultatsiya ma'lumotlarini yangilash
+    update_consultation(callback.from_user.id, day_label, time_slot)
 
     # Admin(lar)ga xabar
     booking = get_booking_with_user(booking_id)

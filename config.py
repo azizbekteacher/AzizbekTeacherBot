@@ -12,3 +12,7 @@ ADMIN_IDS: list[int] = [
 ]
 
 VIDEO_LINK = os.getenv("VIDEO_LINK", "https://youtu.be/example")
+
+# Google Sheets
+GOOGLE_SHEETS_CREDENTIALS = os.getenv("GOOGLE_SHEETS_CREDENTIALS", "credentials.json")
+GOOGLE_SHEETS_SPREADSHEET_ID = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID", "")

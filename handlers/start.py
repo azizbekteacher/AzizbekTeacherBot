@@ -9,6 +9,7 @@ from aiogram.types import (
 )
 
 from config import VIDEO_LINK
+from google_sheets import append_registration
 from db import (
     save_user, get_user_by_telegram_id, is_admin,
     schedule_followup_messages, save_survey_answers, get_survey_answers,
@@ -174,6 +175,25 @@ async def finish_registration(target, state: FSMContext, user_telegram_id: int):
     # Konsultatsiyaga yozildi — 30 daqiqalik followup xabarni bekor qilish
     cancel_pending_followups(user_telegram_id)
     schedule_followup_messages(user_telegram_id)
+
+    # Google Sheets ga yozish
+    append_registration({
+        "full_name": data.get("full_name", ""),
+        "phone": data.get("phone", ""),
+        "extra_phone": data.get("extra_phone", ""),
+        "username": data.get("username", ""),
+        "age": data.get("age", ""),
+        "workplace": data.get("workplace", ""),
+        "methods_tried": data.get("methods_tried", ""),
+        "previous_courses": data.get("previous_courses", ""),
+        "exam_plan": data.get("exam_plan", ""),
+        "exam_goal": data.get("exam_goal", ""),
+        "importance": data.get("importance", ""),
+        "result_meaning": data.get("result_meaning", ""),
+        "budget": data.get("budget", ""),
+        "video_watched": data.get("video_watched", ""),
+        "telegram_id": user_telegram_id,
+    })
 
     video_watched = data.get("video_watched", "")
     if video_watched and "oxirigacha" in video_watched:
