@@ -283,15 +283,22 @@ def create_custom_message(key: str, label: str, category: str, text: str | None 
 
 
 def delete_message(key: str) -> bool:
-    seed_keys = {row[0] for row in DEFAULT_MESSAGES}
-    if key in seed_keys:
-        return False
     conn = get_connection()
     cur = conn.execute("DELETE FROM bot_messages WHERE key = ?", (key,))
     conn.commit()
     deleted = cur.rowcount > 0
     conn.close()
     return deleted
+
+
+def clear_category_messages(category: str) -> int:
+    """Kategoriya bo'yicha barcha xabarlarni o'chirish."""
+    conn = get_connection()
+    cur = conn.execute("DELETE FROM bot_messages WHERE category = ?", (category,))
+    conn.commit()
+    count = cur.rowcount
+    conn.close()
+    return count
 
 
 def get_start_messages() -> list[dict]:

@@ -95,6 +95,8 @@ def messages_list_keyboard(category: str) -> InlineKeyboardMarkup:
         )])
     if category == "start":
         buttons.append([InlineKeyboardButton(text="+ Yangi start xabar qo'shish", callback_data="msgcat:new_start")])
+    if category == "registration":
+        buttons.append([InlineKeyboardButton(text="+ Yangi ro'yxatdan o'tish xabari", callback_data="msgcat:new_registration")])
     if category == "followup":
         buttons.append([InlineKeyboardButton(text="+ Yangi follow-up qo'shish", callback_data="msgcat:new_followup")])
     buttons.append([InlineKeyboardButton(text="Orqaga", callback_data="msgcat:back")])
@@ -116,9 +118,12 @@ def message_view_keyboard(msg: dict) -> InlineKeyboardMarkup:
         buttons.append([InlineKeyboardButton(
             text=extra_label, callback_data=f"msgedit:companion:{msg['key']}"
         )])
-    active_text = "O'chirish" if msg["is_active"] else "Yoqish"
+    active_text = "Faolsizlantirish" if msg["is_active"] else "Faollashtirish"
     buttons.append([InlineKeyboardButton(
         text=active_text, callback_data=f"msgedit:toggle:{msg['key']}"
+    )])
+    buttons.append([InlineKeyboardButton(
+        text="Butunlay o'chirish", callback_data=f"msgedit:delete:{msg['key']}"
     )])
     buttons.append([InlineKeyboardButton(text="Orqaga", callback_data=f"msgcat:{msg['category']}")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -190,11 +195,12 @@ async def on_msg_back_to_categories(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(MessageEditor.select_category, F.data == "msgcat:new_start")
 @router.callback_query(MessageEditor.select_category, F.data == "msgcat:new_followup")
+@router.callback_query(MessageEditor.select_category, F.data == "msgcat:new_registration")
 async def on_new_message(callback: CallbackQuery, state: FSMContext):
-    cat = "start" if "new_start" in callback.data else "followup"
+    cat = "start" if "new_start" in callback.data else ("registration" if "new_registration" in callback.data else "followup")
     await state.update_data(new_category=cat)
     await state.set_state(MessageEditor.new_label)
-    cat_label = "start" if cat == "start" else "follow-up"
+    cat_label = CATEGORY_LABELS.get(cat, cat)
     await callback.message.edit_text(
         f"<b>Yangi {cat_label} xabar</b>\n\nXabar nomini kiriting (masalan: Eslatma xabar):"
     )
@@ -219,11 +225,12 @@ async def on_category_selected(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(MessageEditor.select_message, F.data == "msgcat:new_start")
 @router.callback_query(MessageEditor.select_message, F.data == "msgcat:new_followup")
+@router.callback_query(MessageEditor.select_message, F.data == "msgcat:new_registration")
 async def on_new_message_from_list(callback: CallbackQuery, state: FSMContext):
-    cat = "start" if "new_start" in callback.data else "followup"
+    cat = "start" if "new_start" in callback.data else ("registration" if "new_registration" in callback.data else "followup")
     await state.update_data(new_category=cat)
     await state.set_state(MessageEditor.new_label)
-    cat_label = "start" if cat == "start" else "follow-up"
+    cat_label = CATEGORY_LABELS.get(cat, cat)
     await callback.message.edit_text(
         f"<b>Yangi {cat_label} xabar</b>\n\nXabar nomini kiriting (masalan: Eslatma xabar):"
     )
@@ -403,6 +410,26 @@ async def on_toggle_active(callback: CallbackQuery, state: FSMContext):
     await callback.answer("Holat o'zgartirildi!")
 
 
+# --- Delete message ---
+@router.callback_query(MessageEditor.view_message, F.data.startswith("msgedit:delete:"))
+async def on_delete_message(callback: CallbackQuery, state: FSMContext):
+    key = callback.data.split(":", 2)[2]
+    msg = get_msg(key)
+    if not msg:
+        await callback.answer("Xabar topilmadi", show_alert=True)
+        return
+    category = msg["category"]
+    delete_message(key)
+    delete_message(f"{key}_extra")
+    await state.set_state(MessageEditor.select_message)
+    cat_label = CATEGORY_LABELS.get(category, category)
+    await callback.message.edit_text(
+        f"Xabar o'chirildi!\n\n<b>{cat_label}</b> xabarlari:",
+        reply_markup=messages_list_keyboard(category),
+    )
+    await callback.answer()
+
+
 # --- Companion (qo'shimcha) xabar ---
 @router.callback_query(MessageEditor.view_message, F.data.startswith("msgedit:companion:"))
 async def on_companion_message(callback: CallbackQuery, state: FSMContext):
@@ -440,7 +467,8 @@ async def process_new_label(message: Message, state: FSMContext):
         return
     data = await state.get_data()
     cat = data.get("new_category", "followup")
-    prefix = "start_custom_" if cat == "start" else "followup_custom_"
+    prefixes = {"start": "start_custom_", "registration": "reg_custom_", "followup": "followup_custom_"}
+    prefix = prefixes.get(cat, "custom_")
     key = prefix + label.lower().replace(" ", "_")[:20]
     await state.update_data(new_key=key, new_label=label)
     await state.set_state(MessageEditor.new_text)
@@ -474,7 +502,7 @@ async def process_new_text(message: Message, state: FSMContext):
     if file_id:
         await state.update_data(new_file_id=file_id, new_content_type=content_type)
         data = await state.get_data()
-        if data.get("new_category") == "start":
+        if data.get("new_category") in ("start", "registration"):
             await _save_new_message(message, state, delay_minutes=0)
             return
         await state.set_state(MessageEditor.new_delay)
@@ -506,7 +534,7 @@ async def on_new_media_yes(callback: CallbackQuery, state: FSMContext):
 async def on_new_media_no(callback: CallbackQuery, state: FSMContext):
     await state.update_data(new_file_id=None, new_content_type="text")
     data = await state.get_data()
-    if data.get("new_category") == "start":
+    if data.get("new_category") in ("start", "registration"):
         await _save_new_message(callback.message, state, delay_minutes=0)
         await callback.answer()
         return
@@ -544,7 +572,7 @@ async def process_new_media(message: Message, state: FSMContext):
 
     await state.update_data(new_file_id=file_id, new_content_type=content_type)
     data = await state.get_data()
-    if data.get("new_category") == "start":
+    if data.get("new_category") in ("start", "registration"):
         await _save_new_message(message, state, delay_minutes=0)
         return
     await state.set_state(MessageEditor.new_delay)
