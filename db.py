@@ -102,6 +102,19 @@ def init_db():
             conn.commit()
         except sqlite3.OperationalError:
             pass
+    # Migration: eski registration xabarlarini o'chirish (v2 oqim)
+    old_reg_keys = [
+        "reg_name_prompt", "reg_phone_error", "reg_username_prompt", "reg_username_error",
+        "reg_age_prompt", "reg_age_error", "reg_workplace_prompt", "reg_methods_prompt",
+        "reg_courses_prompt", "reg_exam_prompt", "reg_exam_result_prompt",
+        "reg_importance_prompt", "reg_result_meaning_prompt", "reg_budget_prompt",
+        "reg_phone_prompt_old", "reg_complete_yes", "reg_complete_no",
+    ]
+    # _extra companion xabarlarini ham o'chirish
+    all_old_keys = old_reg_keys + [k + "_extra" for k in old_reg_keys]
+    placeholders = ",".join("?" * len(all_old_keys))
+    conn.execute(f"DELETE FROM bot_messages WHERE key IN ({placeholders})", all_old_keys)
+    conn.commit()
     conn.close()
 
 
