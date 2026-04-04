@@ -23,6 +23,7 @@ from db import (
     get_user_survey_by_telegram_id, get_booking_detail_with_survey,
     get_detailed_stats, get_users_paginated, search_users,
     get_users_without_survey,
+    add_tester, remove_tester, get_tester_ids,
 )
 
 router = Router()
@@ -43,6 +44,9 @@ ADMIN_COMMANDS = USER_COMMANDS + [
     BotCommand(command="messages", description="Bot xabarlari"),
     BotCommand(command="consultations", description="Konsultatsiyalar"),
     BotCommand(command="survey_remind", description="So'rovnoma eslatma yuborish"),
+    BotCommand(command="testers", description="Testerlar ro'yxati"),
+    BotCommand(command="addtester", description="Tester qo'shish"),
+    BotCommand(command="removetester", description="Tester o'chirish"),
 ]
 
 
@@ -615,6 +619,73 @@ async def cmd_list_admins(message: Message):
     lines.append(
         "\nQo'shish: /addadmin <code>ID</code>"
         "\nO'chirish: /removeadmin <code>ID</code>"
+    )
+    await message.answer("\n".join(lines))
+
+
+# --- Tester management ---
+
+
+@cmd_router.message(Command("addtester"))
+async def cmd_add_tester(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2 or not args[1].strip().lstrip("-").isdigit():
+        await message.answer(
+            "<b>Tester qo'shish</b>\n\n"
+            "Foydalanish: <code>/addtester 123456789</code>\n\n"
+            "Tester /start bosganida hamma ma'lumot tozalanadi va boshidan boshlaydi.\n"
+            "Telegram ID ni @userinfobot dan olish mumkin."
+        )
+        return
+
+    tester_id = int(args[1].strip())
+    if add_tester(tester_id, message.from_user.id):
+        await message.answer(
+            f"<b>Tester qo'shildi!</b>\n\nID: <code>{tester_id}</code>"
+        )
+    else:
+        await message.answer(f"Bu foydalanuvchi allaqachon tester: <code>{tester_id}</code>")
+
+
+@cmd_router.message(Command("removetester"))
+async def cmd_remove_tester(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2 or not args[1].strip().lstrip("-").isdigit():
+        await message.answer(
+            "<b>Tester o'chirish</b>\n\n"
+            "Foydalanish: <code>/removetester 123456789</code>"
+        )
+        return
+
+    tester_id = int(args[1].strip())
+    if remove_tester(tester_id):
+        await message.answer(f"<b>Tester o'chirildi!</b>\n\nID: <code>{tester_id}</code>")
+    else:
+        await message.answer(f"Bu foydalanuvchi tester emas: <code>{tester_id}</code>")
+
+
+@cmd_router.message(Command("testers"))
+async def cmd_list_testers(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+
+    tester_ids = get_tester_ids()
+    if not tester_ids:
+        await message.answer("Hozircha testerlar yo'q.\n\nQo'shish: /addtester <code>ID</code>")
+        return
+
+    lines = [f"<b>Testerlar ro'yxati</b> ({len(tester_ids)} ta)\n"]
+    for i, tid in enumerate(tester_ids, 1):
+        lines.append(f"{i}. <code>{tid}</code>")
+    lines.append(
+        "\nQo'shish: /addtester <code>ID</code>"
+        "\nO'chirish: /removetester <code>ID</code>"
     )
     await message.answer("\n".join(lines))
 

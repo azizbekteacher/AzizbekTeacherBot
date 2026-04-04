@@ -17,13 +17,16 @@ from db import (
     check_phone_exists, check_username_exists,
     save_user_extra_phone, get_admin_ids,
     schedule_start_followup, cancel_pending_followups,
+    is_tester, reset_user_data,
 )
 
 router = Router()
 
 
-async def send_bot_msg(target: Message, key: str, reply_markup=None, edit: bool = False, **fmt):
-    """bot_messages jadvalidan xabarni content_type ga qarab yuborish (photo, video, voice, text)."""
+async def send_bot_msg(target: Message, key: str, reply_markup=None, edit: bool = False,
+                       send_companion: bool = False, **fmt):
+    """bot_messages jadvalidan xabarni content_type ga qarab yuborish (photo, video, voice, text).
+    send_companion=True bo'lsa, {key}_extra xabar ham yuboriladi (agar mavjud va faol bo'lsa)."""
     msg_data = get_msg(key)
     text = get_msg_text(key)
     if fmt and text:
@@ -39,6 +42,10 @@ async def send_bot_msg(target: Message, key: str, reply_markup=None, edit: bool 
     if edit and not has_media:
         if text:
             await target.edit_text(text, reply_markup=reply_markup)
+        if send_companion:
+            extra_msg = get_msg(f"{key}_extra")
+            if extra_msg and extra_msg.get("is_active", 1):
+                await send_bot_msg(target, f"{key}_extra")
         return
 
     if edit and has_media:
@@ -58,6 +65,11 @@ async def send_bot_msg(target: Message, key: str, reply_markup=None, edit: bool 
     elif text:
         await target.answer(text, reply_markup=reply_markup)
 
+    if send_companion and not edit:
+        extra_msg = get_msg(f"{key}_extra")
+        if extra_msg and extra_msg.get("is_active", 1):
+            await send_bot_msg(target, f"{key}_extra")
+
 
 def main_menu_kb(user_id: int) -> ReplyKeyboardMarkup | ReplyKeyboardRemove:
     if is_admin(user_id):
@@ -76,8 +88,6 @@ def main_menu_kb(user_id: int) -> ReplyKeyboardMarkup | ReplyKeyboardRemove:
 class Registration(StatesGroup):
     waiting_for_name = State()          # 1
     waiting_for_phone = State()         # 2
-    extra_phone_choice = State()        # 2.5
-    waiting_for_extra_phone = State()   # 2.6
     waiting_for_username = State()      # 3
     waiting_for_age = State()           # 4
     waiting_for_workplace = State()     # 5
@@ -146,7 +156,7 @@ async def advance_reg(target, state: FSMContext, from_key: str):
             continue
         await state.set_state(next_state)
         kb = _build_step_kb(kb_type) if kb_type else ReplyKeyboardRemove()
-        await send_bot_msg(target, msg_key, reply_markup=kb)
+        await send_bot_msg(target, msg_key, reply_markup=kb, send_companion=True)
         return False
     return True
 
@@ -235,6 +245,11 @@ async def cmd_start(message: Message, state: FSMContext):
         )
         return
 
+    # Test akkaunt — har safar /start bosganida hamma ma'lumot tozalanadi
+    if is_tester(message.from_user.id):
+        reset_user_data(message.from_user.id)
+        # Yangi user sifatida davom etadi (pastda)
+
     user = get_user_by_telegram_id(message.from_user.id)
     if user:
         await state.clear()
@@ -307,52 +322,6 @@ async def process_phone(message: Message, state: FSMContext):
         return
 
     await state.update_data(phone=phone)
-    await state.set_state(Registration.extra_phone_choice)
-
-    await message.answer(
-        f"Telefon raqamingiz qabul qilindi: <b>{phone}</b>\n\n"
-        "Agar sizda yana boshqa telefon raqam bo'lsa, uni ham qo'shishingiz mumkin.",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Boshqa raqam qo'shish", callback_data="reg:extra_phone")],
-            [InlineKeyboardButton(text="Keyingi", callback_data="reg:skip_extra")],
-        ]),
-    )
-
-
-# --- 2.5 Qo'shimcha telefon ---
-
-@router.callback_query(Registration.extra_phone_choice, F.data == "reg:extra_phone")
-async def on_extra_phone(callback: CallbackQuery, state: FSMContext):
-    await state.set_state(Registration.waiting_for_extra_phone)
-    await callback.message.edit_reply_markup(reply_markup=None)
-    await callback.message.answer(
-        "Qo'shimcha telefon raqamini kiriting:",
-        reply_markup=ForceReply(input_field_placeholder="+998"),
-    )
-    await callback.answer()
-
-
-@router.callback_query(Registration.extra_phone_choice, F.data == "reg:skip_extra")
-async def on_skip_extra_phone(callback: CallbackQuery, state: FSMContext):
-    await callback.message.edit_reply_markup(reply_markup=None)
-    if await advance_reg(callback.message, state, "reg_username_prompt"):
-        await finish_registration(callback.message, state, callback.from_user.id)
-    await callback.answer()
-
-
-@router.message(Registration.waiting_for_extra_phone)
-async def process_extra_phone(message: Message, state: FSMContext):
-    phone = message.text.strip() if message.text else ""
-    cleaned = phone.replace("+", "").replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-    if not cleaned.isdigit() or len(cleaned) < 9:
-        await message.answer(
-            "Iltimos, to'g'ri telefon raqam kiriting:",
-            reply_markup=ForceReply(input_field_placeholder="+998"),
-        )
-        return
-
-    await state.update_data(extra_phone=phone)
-    await message.answer(f"Qo'shimcha raqam qabul qilindi: <b>{phone}</b>")
     if await advance_reg(message, state, "reg_username_prompt"):
         await finish_registration(message, state, message.from_user.id)
 
@@ -510,7 +479,8 @@ async def on_survey_fill(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Siz allaqachon so'rovnomani to'ldirgansiz!", show_alert=True)
         return
     await state.set_state(Registration.waiting_for_name)
-    await send_bot_msg(callback.message, "reg_welcome", reply_markup=ReplyKeyboardRemove())
+    await send_bot_msg(callback.message, "reg_welcome", reply_markup=ReplyKeyboardRemove(),
+                       send_companion=True)
     await callback.answer()
 
 
@@ -574,7 +544,8 @@ async def cmd_consultation(message: Message, state: FSMContext):
     survey = get_survey_answers(message.from_user.id) if user else None
     if not survey:
         await state.set_state(Registration.waiting_for_name)
-        await send_bot_msg(message, "reg_welcome", reply_markup=ReplyKeyboardRemove())
+        await send_bot_msg(message, "reg_welcome", reply_markup=ReplyKeyboardRemove(),
+                           send_companion=True)
         return
 
     # So'rovnoma to'ldirilgan — aktiv booking bormi?
@@ -622,7 +593,10 @@ async def cmd_admin_panel(message: Message):
         "/broadcast -- Xabar yuborish\n"
         "/messages -- Bot xabarlarini boshqarish\n"
         "/consultations -- Konsultatsiyalar jadvali\n"
-        "/survey_remind -- So'rovnoma eslatma yuborish\n\n"
+        "/survey_remind -- So'rovnoma eslatma yuborish\n"
+        "/testers -- Testerlar ro'yxati\n"
+        "/addtester <code>ID</code> -- Tester qo'shish\n"
+        "/removetester <code>ID</code> -- Tester o'chirish\n\n"
         "Telegram ID ni @userinfobot dan olish mumkin.",
         reply_markup=kb,
     )

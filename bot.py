@@ -30,6 +30,9 @@ ADMIN_COMMANDS = USER_COMMANDS + [
     BotCommand(command="messages", description="Bot xabarlari"),
     BotCommand(command="consultations", description="Konsultatsiyalar"),
     BotCommand(command="survey_remind", description="So'rovnoma eslatma yuborish"),
+    BotCommand(command="testers", description="Testerlar ro'yxati"),
+    BotCommand(command="addtester", description="Tester qo'shish"),
+    BotCommand(command="removetester", description="Tester o'chirish"),
 ]
 
 

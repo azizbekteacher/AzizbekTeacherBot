@@ -67,6 +67,12 @@ def init_db():
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
+        CREATE TABLE IF NOT EXISTS testers (
+            telegram_id INTEGER PRIMARY KEY,
+            added_by INTEGER,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
         CREATE TABLE IF NOT EXISTS bot_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             key TEXT UNIQUE NOT NULL,
@@ -365,6 +371,58 @@ def is_admin(telegram_id: int) -> bool:
     row = conn.execute("SELECT 1 FROM admins WHERE telegram_id = ?", (telegram_id,)).fetchone()
     conn.close()
     return row is not None
+
+
+def add_tester(telegram_id: int, added_by: int) -> bool:
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO testers (telegram_id, added_by) VALUES (?, ?)",
+            (telegram_id, added_by),
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except sqlite3.IntegrityError:
+        conn.close()
+        return False
+
+
+def remove_tester(telegram_id: int) -> bool:
+    conn = get_connection()
+    cur = conn.execute("DELETE FROM testers WHERE telegram_id = ?", (telegram_id,))
+    conn.commit()
+    removed = cur.rowcount > 0
+    conn.close()
+    return removed
+
+
+def get_tester_ids() -> list[int]:
+    conn = get_connection()
+    rows = conn.execute("SELECT telegram_id FROM testers").fetchall()
+    conn.close()
+    return [r["telegram_id"] for r in rows]
+
+
+def is_tester(telegram_id: int) -> bool:
+    conn = get_connection()
+    row = conn.execute("SELECT 1 FROM testers WHERE telegram_id = ?", (telegram_id,)).fetchone()
+    conn.close()
+    return row is not None
+
+
+def reset_user_data(telegram_id: int):
+    """Test akkaunt uchun — barcha ma'lumotlarni tozalaydi (user, survey, bookings, scheduled)."""
+    conn = get_connection()
+    user = conn.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_id,)).fetchone()
+    if user:
+        user_id = user["id"]
+        conn.execute("DELETE FROM survey_answers WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM bookings WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.execute("DELETE FROM scheduled_messages WHERE telegram_id = ?", (telegram_id,))
+    conn.commit()
+    conn.close()
 
 
 def save_user(telegram_id: int, full_name: str, phone: str) -> int:
