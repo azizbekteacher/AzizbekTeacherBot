@@ -17,25 +17,8 @@ SCOPES = [
 ]
 
 HEADERS = [
-    "№",
-    "Ism",
-    "Telefon",
-    "Qo'shimcha tel",
-    "Username",
-    "Yosh",
-    "Ish/O'qish joyi",
-    "Sinab ko'rgan usullari",
-    "Kurslar",
-    "Imtihon rejasi",
-    "Imtihon natijasi",
-    "Muhimlik",
-    "Natija ma'nosi",
-    "Byudjet",
-    "Video ko'rganmi",
-    "Konsultatsiya kuni",
-    "Konsultatsiya vaqti",
-    "Telegram ID",
-    "Ro'yxatdan o'tgan sana",
+    "No", "Ism (Telegram)", "Telefon", "Maqsad/Natija",
+    "Video ko'rganmi", "Qulay vaqt", "Telegram ID", "Sana",
 ]
 
 _client: gspread.Client | None = None
@@ -86,20 +69,14 @@ def _get_worksheet() -> gspread.Worksheet | None:
 
 
 def append_registration(data: dict):
-    """Ro'yxatdan o'tgan foydalanuvchi ma'lumotlarini Google Sheets ga qo'shish.
-
-    data kalitlari: full_name, phone, extra_phone, username, age, workplace,
-                    methods_tried, previous_courses, exam_plan, exam_goal,
-                    importance, result_meaning, budget, video_watched, telegram_id
-    """
+    """Ro'yxatdan o'tgan foydalanuvchi ma'lumotlarini Google Sheets ga qo'shish."""
     worksheet = _get_worksheet()
     if worksheet is None:
         return
 
     try:
-        # Tartib raqamini aniqlash
         all_values = worksheet.get_all_values()
-        row_number = len(all_values)  # header = 1-qator, shuning uchun len = keyingi №
+        row_number = len(all_values)
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
@@ -107,20 +84,9 @@ def append_registration(data: dict):
             row_number,
             data.get("full_name", ""),
             data.get("phone", ""),
-            data.get("extra_phone", ""),
-            data.get("username", ""),
-            data.get("age", ""),
-            data.get("workplace", ""),
-            data.get("methods_tried", ""),
-            data.get("previous_courses", ""),
-            data.get("exam_plan", ""),
-            data.get("exam_goal", ""),
-            data.get("importance", ""),
-            data.get("result_meaning", ""),
-            data.get("budget", ""),
+            data.get("goal", ""),
             data.get("video_watched", ""),
-            "",  # Konsultatsiya kuni — hali bo'sh
-            "",  # Konsultatsiya vaqti — hali bo'sh
+            data.get("preferred_time", ""),
             str(data.get("telegram_id", "")),
             now,
         ]
@@ -131,24 +97,59 @@ def append_registration(data: dict):
 
 
 def update_consultation(telegram_id: int, date_label: str, time_slot: str):
-    """Foydalanuvchining konsultatsiya kun va vaqtini Google Sheets da yangilash.
-
-    telegram_id bo'yicha qatorni topib, konsultatsiya ustunlarini to'ldiradi.
-    """
+    """Foydalanuvchining konsultatsiya ma'lumotlarini Google Sheets da qo'shish."""
     worksheet = _get_worksheet()
     if worksheet is None:
         return
 
     try:
-        # Telegram ID ustuni — 18-ustun (R)
-        cell = worksheet.find(str(telegram_id), in_column=18)
+        cell = worksheet.find(str(telegram_id), in_column=7)
         if cell is None:
             log.warning("Google Sheets: telegram_id=%s topilmadi", telegram_id)
             return
 
-        # Konsultatsiya kuni — 16-ustun (P), vaqti — 17-ustun (Q)
-        worksheet.update_cell(cell.row, 16, date_label)
-        worksheet.update_cell(cell.row, 17, time_slot)
-        log.info("Google Sheets: konsultatsiya yangilandi — %s, %s %s", telegram_id, date_label, time_slot)
+        # Sana ustuniga konsultatsiya ma'lumotini qo'shish
+        current = worksheet.cell(cell.row, 8).value or ""
+        note = f"{current} | Konsult: {date_label} {time_slot}" if current else f"Konsult: {date_label} {time_slot}"
+        worksheet.update_cell(cell.row, 8, note)
+        log.info("Google Sheets: konsultatsiya yangilandi — %s", telegram_id)
     except Exception as e:
         log.error("Google Sheets konsultatsiya yangilashda xato: %s", e)
+
+
+def migrate_existing_to_sheets():
+    """Mavjud userlarni bir martalik Google Sheets ga yozish (deploy da)."""
+    worksheet = _get_worksheet()
+    if worksheet is None:
+        return
+
+    try:
+        all_values = worksheet.get_all_values()
+        # Agar 2+ qator bo'lsa — allaqachon migrate qilingan
+        if len(all_values) > 1:
+            log.info("Google Sheets: ma'lumotlar allaqachon mavjud, migrate skip")
+            return
+
+        from db import get_all_users_with_survey
+        users = get_all_users_with_survey()
+        if not users:
+            return
+
+        rows = []
+        for i, u in enumerate(users, 1):
+            rows.append([
+                i,
+                u.get("full_name", ""),
+                u.get("phone", ""),
+                u.get("goal") or u.get("exam_goal") or "",
+                u.get("video_watched", ""),
+                u.get("preferred_time") or "",
+                str(u.get("telegram_id", "")),
+                u.get("created_at", ""),
+            ])
+
+        if rows:
+            worksheet.append_rows(rows, value_input_option="USER_ENTERED")
+            log.info("Google Sheets: %d ta mavjud user migrate qilindi", len(rows))
+    except Exception as e:
+        log.error("Google Sheets migrate xatosi: %s", e)

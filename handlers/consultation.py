@@ -111,7 +111,7 @@ async def on_consultation_start(callback: CallbackQuery, state: FSMContext):
 
     from handlers.start import send_bot_msg
     # Konsultatsiya vaqtini belgilash yashirilgan — muvaffaqiyatli ro'yxatdan o'tganlik xabari
-    await send_bot_msg(callback.message, "reg_complete_yes", edit=True)
+    await send_bot_msg(callback.message, "reg_complete", edit=True)
     await callback.answer()
 
 

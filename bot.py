@@ -9,6 +9,7 @@ from aiogram.types import BotCommand, BotCommandScopeChat
 
 from config import BOT_TOKEN, ADMIN_IDS
 from db import init_db, seed_admins, seed_bot_messages, get_admin_ids, migrate_scheduled_users
+from google_sheets import migrate_existing_to_sheets
 from scheduler import run_scheduler
 from handlers import router
 
@@ -57,6 +58,7 @@ async def main():
     seed_bot_messages()
     migrate_scheduled_users()
     seed_admins(ADMIN_IDS)
+    migrate_existing_to_sheets()
     await set_bot_commands(bot)
 
     # Scheduler — delayed xabarlarni DB dan o'qib yuboradi

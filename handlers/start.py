@@ -8,14 +8,12 @@ from aiogram.types import (
     ForceReply,
 )
 
-from config import VIDEO_LINK
 from google_sheets import append_registration
 from db import (
     save_user, get_user_by_telegram_id, is_admin,
     schedule_followup_messages, save_survey_answers, get_survey_answers,
     get_msg, get_msg_text, get_user_active_booking,
-    check_phone_exists, check_username_exists,
-    save_user_extra_phone, get_admin_ids,
+    check_phone_exists, get_admin_ids,
     schedule_start_followup, cancel_pending_followups,
     is_tester, reset_user_data,
 )
@@ -86,79 +84,11 @@ def main_menu_kb(user_id: int) -> ReplyKeyboardMarkup | ReplyKeyboardRemove:
 
 
 class Registration(StatesGroup):
-    waiting_for_name = State()          # 1
-    waiting_for_phone = State()         # 2
-    waiting_for_username = State()      # 3
-    waiting_for_age = State()           # 4
-    waiting_for_workplace = State()     # 5
-    waiting_for_methods = State()       # 6
-    waiting_for_courses = State()       # 7
-    waiting_for_exam = State()          # 8
-    waiting_for_exam_result = State()   # 9
-    waiting_for_importance = State()    # 10 (inline)
-    waiting_for_result_meaning = State()  # 11
-    waiting_for_budget = State()        # 12 (inline)
-    waiting_for_video = State()         # 13 (inline)
-
-
-# Registration oqimi — skip bo'lishi mumkin bo'lgan qadamlar
-# (name va phone MAJBURIY, REG_FLOW da emas)
-REG_FLOW = [
-    ("reg_username_prompt", Registration.waiting_for_username, None),
-    ("reg_age_prompt", Registration.waiting_for_age, None),
-    ("reg_workplace_prompt", Registration.waiting_for_workplace, None),
-    ("reg_methods_prompt", Registration.waiting_for_methods, None),
-    ("reg_courses_prompt", Registration.waiting_for_courses, None),
-    ("reg_exam_prompt", Registration.waiting_for_exam, None),
-    ("reg_exam_result_prompt", Registration.waiting_for_exam_result, None),
-    ("reg_importance_prompt", Registration.waiting_for_importance, "importance"),
-    ("reg_result_meaning_prompt", Registration.waiting_for_result_meaning, None),
-    ("reg_budget_prompt", Registration.waiting_for_budget, "budget"),
-    ("reg_video_prompt", Registration.waiting_for_video, "video"),
-]
-
-
-def _build_step_kb(kb_type: str):
-    """Inline keyboard yaratish — faqat inline savollar uchun."""
-    if kb_type == "importance":
-        return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="1-4 juda muhim emas", callback_data="importance:1-4")],
-            [InlineKeyboardButton(text="5-7 o'rgansam yaxshi", callback_data="importance:5-7")],
-            [InlineKeyboardButton(text="8-10 o'rganishim shart", callback_data="importance:8-10")],
-        ])
-    elif kb_type == "budget":
-        return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Oyiga 500,000 so'mgacha", callback_data="budget:500k")],
-            [InlineKeyboardButton(text="Oyiga 600,000 - 800,000 so'mgacha", callback_data="budget:600-800k")],
-            [InlineKeyboardButton(text="Yaxshi ustoz bilan oyiga 1,000,000 so'mgacha", callback_data="budget:1mln")],
-        ])
-    elif kb_type == "video":
-        return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Ha, oxirigacha ko'rdim", callback_data="video:yes")],
-            [InlineKeyboardButton(text="Yarimigacha ko'rdim", callback_data="video:half")],
-            [InlineKeyboardButton(text="Yo'q, hali ko'rmadim", callback_data="video:no")],
-        ])
-    return None
-
-
-async def advance_reg(target, state: FSMContext, from_key: str):
-    """from_key dan boshlab birinchi faol registration qadamga o'tadi.
-    O'chirilgan qadamlarni skip qiladi.
-    True qaytaradi agar barcha qolgan qadamlar o'chirilgan (reg tugadi)."""
-    found = False
-    for msg_key, next_state, kb_type in REG_FLOW:
-        if not found:
-            if msg_key == from_key:
-                found = True
-            continue
-        msg = get_msg(msg_key)
-        if msg and not msg.get("is_active", 1):
-            continue
-        await state.set_state(next_state)
-        kb = _build_step_kb(kb_type) if kb_type else ReplyKeyboardRemove()
-        await send_bot_msg(target, msg_key, reply_markup=kb, send_companion=True)
-        return False
-    return True
+    waiting_for_name = State()       # 1 (welcome xabari bilan birga)
+    waiting_for_phone = State()      # 2
+    waiting_for_goal = State()       # 3
+    waiting_for_video = State()      # 4 (Ha/Yo'q inline)
+    waiting_for_time = State()       # 5
 
 
 async def finish_registration(target, state: FSMContext, user_telegram_id: int):
@@ -166,63 +96,39 @@ async def finish_registration(target, state: FSMContext, user_telegram_id: int):
     data = await state.get_data()
     await state.clear()
 
-    user_id = save_user(user_telegram_id, data.get("full_name", "Noma'lum"), data.get("phone", ""))
-    if data.get("extra_phone"):
-        save_user_extra_phone(user_telegram_id, data["extra_phone"])
+    full_name = data.get("full_name", "Noma'lum")
+    phone = data.get("phone", "")
+
+    user_id = save_user(user_telegram_id, full_name, phone)
     save_survey_answers(user_id, {
-        "username": data.get("username"),
-        "age": data.get("age"),
-        "workplace": data.get("workplace"),
-        "methods_tried": data.get("methods_tried"),
-        "previous_courses": data.get("previous_courses"),
-        "exam_plan": data.get("exam_plan"),
-        "exam_goal": data.get("exam_goal"),
-        "importance": data.get("importance"),
-        "result_meaning": data.get("result_meaning"),
-        "budget": data.get("budget"),
+        "goal": data.get("goal"),
         "video_watched": data.get("video_watched"),
+        "preferred_time": data.get("preferred_time"),
     })
-    # Konsultatsiyaga yozildi — 30 daqiqalik followup xabarni bekor qilish
+    # Start followup bekor qilish + yangi followup rejalashtirish
     cancel_pending_followups(user_telegram_id)
     schedule_followup_messages(user_telegram_id)
 
     # Google Sheets ga yozish
     append_registration({
-        "full_name": data.get("full_name", ""),
-        "phone": data.get("phone", ""),
-        "extra_phone": data.get("extra_phone", ""),
-        "username": data.get("username", ""),
-        "age": data.get("age", ""),
-        "workplace": data.get("workplace", ""),
-        "methods_tried": data.get("methods_tried", ""),
-        "previous_courses": data.get("previous_courses", ""),
-        "exam_plan": data.get("exam_plan", ""),
-        "exam_goal": data.get("exam_goal", ""),
-        "importance": data.get("importance", ""),
-        "result_meaning": data.get("result_meaning", ""),
-        "budget": data.get("budget", ""),
+        "full_name": full_name,
+        "phone": phone,
+        "goal": data.get("goal", ""),
         "video_watched": data.get("video_watched", ""),
+        "preferred_time": data.get("preferred_time", ""),
         "telegram_id": user_telegram_id,
     })
 
-    video_watched = data.get("video_watched", "")
-    if video_watched and "oxirigacha" in video_watched:
-        await send_bot_msg(target, "reg_complete_yes",
-                           reply_markup=main_menu_kb(user_telegram_id))
-    else:
-        await send_bot_msg(target, "reg_complete_no",
-                           reply_markup=main_menu_kb(user_telegram_id),
-                           video_link=VIDEO_LINK)
+    # Yakuniy xabar
+    await send_bot_msg(target, "reg_complete",
+                       reply_markup=main_menu_kb(user_telegram_id),
+                       send_companion=True)
 
-    # Adminlarga yangi konsultatsiya haqida xabar
-    full_name = data.get("full_name", "Noma'lum")
-    phone = data.get("phone", "")
-    extra_phone = data.get("extra_phone")
-    extra_line = f"\nQo'shimcha tel: {extra_phone}" if extra_phone else ""
+    # Adminlarga xabar
     admin_text = (
         f"<b>Yangi so'rovnoma to'ldirildi!</b>\n\n"
         f"Ism: {full_name}\n"
-        f"Tel: {phone}{extra_line}\n"
+        f"Tel: {phone}\n"
         f"Telegram: <code>{user_telegram_id}</code>"
     )
     for admin_id in get_admin_ids():
@@ -273,19 +179,20 @@ async def cmd_start(message: Message, state: FSMContext):
 
 @router.message(Registration.waiting_for_name)
 async def process_name(message: Message, state: FSMContext):
-    full_name = message.text.strip()
+    if not message.text:
+        await send_bot_msg(message, "reg_name_error")
+        return
 
+    full_name = message.text.strip()
     if len(full_name) < 3:
         await send_bot_msg(message, "reg_name_error")
         return
 
     await state.update_data(full_name=full_name)
     await state.set_state(Registration.waiting_for_phone)
-
-    await message.answer(
-        "Siz bilan bog'lanishimiz mumkin bo'lgan telefon raqamini kiriting:",
-        reply_markup=ForceReply(input_field_placeholder="+998"),
-    )
+    await send_bot_msg(message, "reg_phone_prompt",
+                       reply_markup=ForceReply(input_field_placeholder="+998"),
+                       send_companion=True)
 
 
 # --- 2. Telefon ---
@@ -322,152 +229,82 @@ async def process_phone(message: Message, state: FSMContext):
         return
 
     await state.update_data(phone=phone)
-    if await advance_reg(message, state, "reg_username_prompt"):
-        await finish_registration(message, state, message.from_user.id)
+    await state.set_state(Registration.waiting_for_goal)
+    await send_bot_msg(message, "reg_goal_prompt",
+                       reply_markup=ReplyKeyboardRemove(),
+                       send_companion=True)
 
 
-# --- 3. Username ---
+# --- 3. Maqsad ---
 
-@router.message(Registration.waiting_for_username)
-async def process_username(message: Message, state: FSMContext):
-    username = message.text.strip()
-    if not username.startswith("@"):
-        await send_bot_msg(message, "reg_username_error")
+@router.message(Registration.waiting_for_goal)
+async def process_goal(message: Message, state: FSMContext):
+    if not message.text:
+        await send_bot_msg(message, "reg_goal_prompt")
         return
 
-    # Dublikat tekshiruv
-    existing = check_username_exists(username, message.from_user.id)
-    if existing:
-        await message.answer(
-            f"Bu username allaqachon ro'yxatdan o'tgan: <b>{existing['full_name']}</b>\n\n"
-            "Agar bu siz bo'lsangiz, /start buyrug'ini bosing.\n"
-            "Boshqa username kiriting:"
-        )
-        return
+    await state.update_data(goal=message.text.strip())
+    await state.set_state(Registration.waiting_for_video)
 
-    await state.update_data(username=username)
-    if await advance_reg(message, state, "reg_age_prompt"):
-        await finish_registration(message, state, message.from_user.id)
+    video_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Ha", callback_data="video:yes")],
+        [InlineKeyboardButton(text="Yo'q", callback_data="video:no")],
+    ])
+    await send_bot_msg(message, "reg_video_prompt",
+                       reply_markup=video_kb,
+                       send_companion=True)
 
 
-# --- 4. Yosh ---
+# --- 4. Video ko'rganmi (inline) ---
 
-@router.message(Registration.waiting_for_age)
-async def process_age(message: Message, state: FSMContext):
-    text = message.text.strip()
-    if not text.isdigit():
-        await send_bot_msg(message, "reg_age_error")
-        return
-
-    await state.update_data(age=int(text))
-    if await advance_reg(message, state, "reg_workplace_prompt"):
-        await finish_registration(message, state, message.from_user.id)
-
-
-# --- 5. O'qish/Ish joyi ---
-
-@router.message(Registration.waiting_for_workplace)
-async def process_workplace(message: Message, state: FSMContext):
-    await state.update_data(workplace=message.text.strip())
-    if await advance_reg(message, state, "reg_methods_prompt"):
-        await finish_registration(message, state, message.from_user.id)
-
-
-# --- 6. Sinab ko'rgan usullar ---
-
-@router.message(Registration.waiting_for_methods)
-async def process_methods(message: Message, state: FSMContext):
-    await state.update_data(methods_tried=message.text.strip())
-    if await advance_reg(message, state, "reg_courses_prompt"):
-        await finish_registration(message, state, message.from_user.id)
-
-
-# --- 7. Kurslarda o'qiganmi ---
-
-@router.message(Registration.waiting_for_courses)
-async def process_courses(message: Message, state: FSMContext):
-    await state.update_data(previous_courses=message.text.strip())
-    if await advance_reg(message, state, "reg_exam_prompt"):
-        await finish_registration(message, state, message.from_user.id)
-
-
-# --- 8. Imtihon rejasi ---
-
-@router.message(Registration.waiting_for_exam)
-async def process_exam(message: Message, state: FSMContext):
-    await state.update_data(exam_plan=message.text.strip())
-    if await advance_reg(message, state, "reg_exam_result_prompt"):
-        await finish_registration(message, state, message.from_user.id)
-
-
-# --- 9. Imtihon natijasi ---
-
-@router.message(Registration.waiting_for_exam_result)
-async def process_exam_result(message: Message, state: FSMContext):
-    await state.update_data(exam_goal=message.text.strip())
-    if await advance_reg(message, state, "reg_importance_prompt"):
-        await finish_registration(message, state, message.from_user.id)
-
-
-# --- 10. Muhimlik (inline) ---
-
-@router.callback_query(Registration.waiting_for_importance, F.data.startswith("importance:"))
-async def process_importance(callback: CallbackQuery, state: FSMContext):
-    importance = callback.data.split(":", 1)[1]
-    await state.update_data(importance=importance)
+@router.callback_query(Registration.waiting_for_video, F.data == "video:yes")
+async def process_video_yes(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(video_watched="Ha")
     await callback.message.edit_text(
-        f"Javobingiz: <b>{importance}</b>"
+        f"Javobingiz: <b>Ha</b>"
     )
-    if await advance_reg(callback.message, state, "reg_result_meaning_prompt"):
-        await finish_registration(callback.message, state, callback.from_user.id)
+    await state.set_state(Registration.waiting_for_time)
+    await send_bot_msg(callback.message, "reg_time_prompt",
+                       reply_markup=ReplyKeyboardRemove(),
+                       send_companion=True)
     await callback.answer()
 
 
-# --- 11. Natija nimani anglatadi ---
-
-@router.message(Registration.waiting_for_result_meaning)
-async def process_result_meaning(message: Message, state: FSMContext):
-    await state.update_data(result_meaning=message.text.strip())
-    if await advance_reg(message, state, "reg_budget_prompt"):
-        await finish_registration(message, state, message.from_user.id)
-
-
-# --- 12. Byudjet (inline) ---
-
-@router.callback_query(Registration.waiting_for_budget, F.data.startswith("budget:"))
-async def process_budget(callback: CallbackQuery, state: FSMContext):
-    budget = callback.data.split(":", 1)[1]
-    await state.update_data(budget=budget)
-    budget_labels = {
-        "500k": "Oyiga 500,000 so'mgacha",
-        "600-800k": "Oyiga 600,000 - 800,000 so'mgacha",
-        "1mln": "Yaxshi ustoz bilan oyiga 1,000,000 so'mgacha",
-    }
+@router.callback_query(Registration.waiting_for_video, F.data == "video:no")
+async def process_video_no(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(video_watched="Yo'q")
     await callback.message.edit_text(
-        f"Javobingiz: <b>{budget_labels.get(budget, budget)}</b>"
+        f"Javobingiz: <b>Yo'q</b>"
     )
-    if await advance_reg(callback.message, state, "reg_video_prompt"):
-        await finish_registration(callback.message, state, callback.from_user.id)
+    consult_kb = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="Konsultatsiya")]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+    await send_bot_msg(callback.message, "reg_video_no",
+                       reply_markup=consult_kb,
+                       send_companion=True)
     await callback.answer()
 
 
-# --- 13. Video ko'rganmi (inline) ---
+@router.message(Registration.waiting_for_video, F.text == "Konsultatsiya")
+async def process_video_consultation(message: Message, state: FSMContext):
+    await state.set_state(Registration.waiting_for_time)
+    await send_bot_msg(message, "reg_time_prompt",
+                       reply_markup=ReplyKeyboardRemove(),
+                       send_companion=True)
 
-@router.callback_query(Registration.waiting_for_video, F.data.startswith("video:"))
-async def process_video(callback: CallbackQuery, state: FSMContext):
-    video_key = callback.data.split(":", 1)[1]
-    video_labels = {
-        "yes": "Ha, oxirigacha ko'rdim",
-        "half": "Yarimigacha ko'rdim",
-        "no": "Yo'q, hali ko'rmadim",
-    }
-    video_watched = video_labels.get(video_key, video_key)
-    await state.update_data(video_watched=video_watched)
-    await callback.message.edit_text(
-        f"Javobingiz: <b>{video_watched}</b>"
-    )
-    await finish_registration(callback.message, state, callback.from_user.id)
-    await callback.answer()
+
+# --- 5. Qulay vaqt ---
+
+@router.message(Registration.waiting_for_time)
+async def process_time(message: Message, state: FSMContext):
+    if not message.text:
+        await send_bot_msg(message, "reg_time_prompt")
+        return
+
+    await state.update_data(preferred_time=message.text.strip())
+    await finish_registration(message, state, message.from_user.id)
 
 
 # --- So'rovnomani to'ldirish (inline button dari broadcast) ---
@@ -567,7 +404,7 @@ async def cmd_consultation(message: Message, state: FSMContext):
         return
 
     # Aktiv booking yo'q — muvaffaqiyatli ro'yxatdan o'tganlik xabari
-    await send_bot_msg(message, "reg_complete_yes",
+    await send_bot_msg(message, "reg_complete",
                        reply_markup=main_menu_kb(message.from_user.id))
 
 

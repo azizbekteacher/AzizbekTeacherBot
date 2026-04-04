@@ -95,53 +95,35 @@ def init_db():
         conn.commit()
     except sqlite3.OperationalError:
         pass
+    # Migration: goal, preferred_time ustunlari
+    for col in ["goal TEXT", "preferred_time TEXT"]:
+        try:
+            conn.execute(f"ALTER TABLE survey_answers ADD COLUMN {col}")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
     conn.close()
 
 
 DEFAULT_MESSAGES = [
     # --- registration ---
     ("reg_welcome", "registration", "Welcome matn", "text",
-     "<b>AzizbekTeacher</b> botiga xush kelibsiz!\n\nMarhamat, o'z <b>ism va familiyangizni</b> kiriting:",
+     "Assalomu alaykum!\n\n<b>AzizbekTeacher</b> botiga xush kelibsiz!\n\nMarhamat, o'z <b>ism va familiyangizni</b> kiriting:",
      None, None),
-    ("reg_name_prompt", "registration", "Ism so'rash", "text",
-     "Marhamat, o'z <b>ism va familiyangizni</b> kiriting:", None, None),
     ("reg_name_error", "registration", "Ism xato", "text",
-     "Iltimos, to'liq ism va familiyangizni kiriting:", None, None),
+     "Iltimos, to'liq ism va familiyangizni kiriting (kamida 3 belgi):", None, None),
     ("reg_phone_prompt", "registration", "Telefon so'rash", "text",
-     "Endi telefon raqamingizni kiriting yoki tugmani bosing:", None, None),
-    ("reg_phone_error", "registration", "Telefon xato", "text",
-     "Iltimos, to'g'ri telefon raqam kiriting yoki tugmani bosing:", None, None),
-    ("reg_username_prompt", "registration", "Username so'rash", "text",
-     "Telegram username ingizni kiriting (masalan: @username):", None, None),
-    ("reg_username_error", "registration", "Username xato", "text",
-     "Iltimos, username ni @ bilan boshlang (masalan: @username):", None, None),
-    ("reg_age_prompt", "registration", "Yosh so'rash", "text",
-     "Yoshingizni kiriting:", None, None),
-    ("reg_age_error", "registration", "Yosh xato", "text",
-     "Iltimos, faqat raqam kiriting (masalan: 20):", None, None),
-    ("reg_workplace_prompt", "registration", "Ish joyi", "text",
-     "O'qish yoki ish joyingiz qayerda?", None, None),
-    ("reg_methods_prompt", "registration", "Usullar", "text",
-     "Ilgari ingliz tilini o'rganish uchun qanday usullarni sinab ko'rgansiz?", None, None),
-    ("reg_courses_prompt", "registration", "Kurslar", "text",
-     "Online yoki offline kurslarda o'qiganmisiz? Qaysilarida?", None, None),
-    ("reg_exam_prompt", "registration", "Imtihon", "text",
-     "Qachon va qanday imtihon topshirmoqchisiz? (masalan: IELTS, CEFR, ...)", None, None),
-    ("reg_exam_result_prompt", "registration", "Imtihon natija", "text",
-     "Imtihonda qanday natijaga erishmoqchisiz?", None, None),
-    ("reg_importance_prompt", "registration", "Muhimlik", "text",
-     "Ingliz tilini o'rganish siz uchun qanchalik muhim?\n10 ballik shkala bo'yicha baholang:", None, None),
-    ("reg_result_meaning_prompt", "registration", "Natija ma'nosi", "text",
-     "Bu natija siz uchun nimani anglatadi? Qisqacha yozing:", None, None),
-    ("reg_budget_prompt", "registration", "Byudjet", "text",
-     "Ingliz tili kursiga oylik byudjetingiz qancha?", None, None),
+     "Sizga bog'laniladigan raqamni kiriting:", None, None),
+    ("reg_goal_prompt", "registration", "Maqsad so'rash", "text",
+     "Qachon va qanday natija olmoqchisiz?", None, None),
     ("reg_video_prompt", "registration", "Video savoli", "text",
-     "Videodarsni ko'rdingizmi?", None, None),
-    ("reg_complete_yes", "registration", "Tugallash (Ha)", "text",
-     "Siz ro'yxatdan muvaffaqiyatli o'tdingiz!\n\nVideo darsni ko'rganingiz uchun rahmat! Tez orada siz bilan bog'lanamiz.",
-     None, None),
-    ("reg_complete_no", "registration", "Tugallash (Yo'q)", "text",
-     "Siz ro'yxatdan muvaffaqiyatli o'tdingiz!\n\nMarhamat, videodarsni ko'rib chiqing:\n\n<a href=\"{video_link}\">Darslikni ko'rish</a>\n\nTez orada siz bilan bog'lanamiz.",
+     '"Fast English: 3 oyda B1" (32 minutlik) videodarsni ko\'rdingizmi?', None, None),
+    ("reg_video_no", "registration", "Video ko'rmagan", "text",
+     "Videodarsni ko'rib, keyin konsultatsiya olishingiz mumkin.\n\nQuyidagi tugmani bosing:", None, None),
+    ("reg_time_prompt", "registration", "Qulay vaqt", "text",
+     "Sizga aloqaga chiqish uchun qaysi vaqt qulay?", None, None),
+    ("reg_complete", "registration", "Yakuniy xabar", "text",
+     "Rahmat! Ma'lumotlaringiz qabul qilindi.\n\nTez orada siz bilan bog'lanamiz!",
      None, None),
     ("start_followup", "general", "Start followup (30 daq)", "text",
      "Siz hali konsultatsiyaga yozilmadingiz.\n\n"
@@ -691,8 +673,9 @@ def save_survey_answers(user_id: int, answers: dict):
     conn.execute(
         """INSERT OR REPLACE INTO survey_answers
            (user_id, username, age, workplace, methods_tried, previous_courses,
-            exam_plan, exam_goal, importance, result_meaning, budget, video_watched)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            exam_plan, exam_goal, importance, result_meaning, budget, video_watched,
+            goal, preferred_time)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             user_id,
             answers.get("username"),
@@ -706,6 +689,8 @@ def save_survey_answers(user_id: int, answers: dict):
             answers.get("result_meaning"),
             answers.get("budget"),
             answers.get("video_watched"),
+            answers.get("goal"),
+            answers.get("preferred_time"),
         ),
     )
     conn.commit()
