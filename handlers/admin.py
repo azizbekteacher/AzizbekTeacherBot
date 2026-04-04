@@ -451,8 +451,41 @@ async def process_new_label(message: Message, state: FSMContext):
 async def process_new_text(message: Message, state: FSMContext):
     text = message.text or message.caption or ""
     await state.update_data(new_text=text)
-    await state.set_state(MessageEditor.new_media_ask)
 
+    # Agar admin media bilan birga jo'natsa — media ni ham avtomatik qabul qilish
+    file_id = None
+    content_type = "text"
+    if message.photo:
+        file_id = message.photo[-1].file_id
+        content_type = "photo"
+    elif message.voice:
+        file_id = message.voice.file_id
+        content_type = "voice"
+    elif message.audio:
+        file_id = message.audio.file_id
+        content_type = "voice"
+    elif message.video:
+        file_id = message.video.file_id
+        content_type = "video"
+    elif message.document:
+        file_id = message.document.file_id
+        content_type = "document"
+
+    if file_id:
+        await state.update_data(new_file_id=file_id, new_content_type=content_type)
+        data = await state.get_data()
+        if data.get("new_category") == "start":
+            await _save_new_message(message, state, delay_minutes=0)
+            return
+        await state.set_state(MessageEditor.new_delay)
+        await message.answer(
+            "Media qabul qilindi!\n\n"
+            "Ro'yxatdan o'tgandan necha daqiqadan keyin yuborilsin?\n\n"
+            "Raqam kiriting (masalan: 60 = 1 soat):"
+        )
+        return
+
+    await state.set_state(MessageEditor.new_media_ask)
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="Ha", callback_data="newfu:media_yes"),
