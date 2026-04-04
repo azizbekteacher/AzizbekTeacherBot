@@ -110,6 +110,12 @@ def message_view_keyboard(msg: dict) -> InlineKeyboardMarkup:
         buttons.append([InlineKeyboardButton(
             text="Vaqtni o'zgartirish", callback_data=f"msgedit:delay:{msg['key']}"
         )])
+    if msg["category"] == "registration" and not msg["key"].endswith("_extra"):
+        extra = get_msg(f"{msg['key']}_extra")
+        extra_label = "Qo'shimcha xabar (bor)" if extra else "+ Qo'shimcha xabar"
+        buttons.append([InlineKeyboardButton(
+            text=extra_label, callback_data=f"msgedit:companion:{msg['key']}"
+        )])
     active_text = "O'chirish" if msg["is_active"] else "Yoqish"
     buttons.append([InlineKeyboardButton(
         text=active_text, callback_data=f"msgedit:toggle:{msg['key']}"
@@ -148,6 +154,12 @@ def format_message_view(msg: dict) -> str:
         lines.append(f"Delay: {delay_text}")
     active_label = "ha" if msg["is_active"] else "yo'q"
     lines.append(f"Faol: {active_label}")
+
+    if msg["category"] == "registration" and not msg["key"].endswith("_extra"):
+        extra = get_msg(f"{msg['key']}_extra")
+        if extra:
+            extra_status = "faol" if extra.get("is_active", 1) else "o'chirilgan"
+            lines.append(f"\nQo'shimcha xabar: bor ({extra_status})")
 
     return "\n".join(lines)
 
@@ -389,6 +401,34 @@ async def on_toggle_active(callback: CallbackQuery, state: FSMContext):
             reply_markup=message_view_keyboard(msg),
         )
     await callback.answer("Holat o'zgartirildi!")
+
+
+# --- Companion (qo'shimcha) xabar ---
+@router.callback_query(MessageEditor.view_message, F.data.startswith("msgedit:companion:"))
+async def on_companion_message(callback: CallbackQuery, state: FSMContext):
+    parent_key = callback.data.split(":", 2)[2]
+    extra_key = f"{parent_key}_extra"
+    extra = get_msg(extra_key)
+
+    if not extra:
+        parent = get_msg(parent_key)
+        parent_label = parent["label"] if parent else parent_key
+        create_custom_message(
+            key=extra_key,
+            label=f"{parent_label} (qo'shimcha)",
+            category="registration",
+            text="",
+        )
+        extra = get_msg(extra_key)
+
+    if extra:
+        await state.update_data(current_msg_key=extra_key, companion_parent_key=parent_key)
+        await state.set_state(MessageEditor.view_message)
+        await callback.message.edit_text(
+            format_message_view(extra),
+            reply_markup=message_view_keyboard(extra),
+        )
+    await callback.answer()
 
 
 # --- New follow-up flow ---
