@@ -105,7 +105,7 @@ def init_db():
     # Migration: eski registration xabarlarini o'chirish (v2 oqim)
     old_reg_keys = [
         "reg_name_prompt", "reg_phone_error", "reg_username_prompt", "reg_username_error",
-        "reg_age_prompt", "reg_age_error", "reg_workplace_prompt", "reg_methods_prompt",
+        "reg_workplace_prompt", "reg_methods_prompt",
         "reg_courses_prompt", "reg_exam_prompt", "reg_exam_result_prompt",
         "reg_importance_prompt", "reg_result_meaning_prompt", "reg_budget_prompt",
         "reg_phone_prompt_old", "reg_complete_yes", "reg_complete_no",
@@ -125,6 +125,10 @@ DEFAULT_MESSAGES = [
      None, None),
     ("reg_name_error", "registration", "Ism xato", "text",
      "Iltimos, to'liq ism va familiyangizni kiriting (kamida 3 belgi):", None, None),
+    ("reg_age_prompt", "registration", "Yosh so'rash", "text",
+     "Yoshingizni kiriting:", None, None),
+    ("reg_age_error", "registration", "Yosh xato", "text",
+     "Iltimos, faqat raqam kiriting (masalan: 20):", None, None),
     ("reg_phone_prompt", "registration", "Telefon so'rash", "text",
      "Sizga bog'laniladigan raqamni kiriting:", None, None),
     ("reg_goal_prompt", "registration", "Maqsad so'rash", "text",
