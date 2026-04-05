@@ -1,13 +1,15 @@
 """Google Sheets integratsiyasi — ro'yxatdan o'tgan foydalanuvchilar va konsultatsiya ma'lumotlari."""
 
+import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 
 import gspread
 from google.oauth2.service_account import Credentials
 
-from config import GOOGLE_SHEETS_CREDENTIALS, GOOGLE_SHEETS_SPREADSHEET_ID
+from config import GOOGLE_SHEETS_SPREADSHEET_ID
 
 log = logging.getLogger(__name__)
 
@@ -30,15 +32,24 @@ def _get_client() -> gspread.Client | None:
     if _client is not None:
         return _client
 
-    creds_path = Path(GOOGLE_SHEETS_CREDENTIALS)
-    if not creds_path.exists():
-        log.warning("Google Sheets credentials fayli topilmadi: %s", creds_path)
-        return None
-
     try:
-        creds = Credentials.from_service_account_file(str(creds_path), scopes=SCOPES)
-        _client = gspread.authorize(creds)
-        return _client
+        # 1) Env variable dan JSON
+        creds_json = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON", "")
+        if creds_json:
+            info = json.loads(creds_json)
+            creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+            _client = gspread.authorize(creds)
+            return _client
+
+        # 2) Fallback: lokal fayl
+        creds_path = Path("credentials.json")
+        if creds_path.exists():
+            creds = Credentials.from_service_account_file(str(creds_path), scopes=SCOPES)
+            _client = gspread.authorize(creds)
+            return _client
+
+        log.warning("Google Sheets credentials topilmadi (env yoki fayl)")
+        return None
     except Exception as e:
         log.error("Google Sheets autentifikatsiya xatosi: %s", e)
         return None
