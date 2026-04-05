@@ -13,7 +13,7 @@ from db import (
     save_user, get_user_by_telegram_id, is_admin,
     schedule_followup_messages, save_survey_answers, get_survey_answers,
     get_msg, get_msg_text, get_user_active_booking,
-    check_phone_exists, get_admin_ids,
+    check_phone_exists, get_admin_ids, get_start_messages,
     schedule_start_followup, cancel_pending_followups,
     is_tester, reset_user_data,
 )
@@ -167,15 +167,20 @@ async def cmd_start(message: Message, state: FSMContext):
                            full_name=user['full_name'])
         return
 
-    # Yangi user — faqat "Konsultatsiya olish" tugmasini ko'rsatish
+    # Yangi user — start xabarlar + followup + "Konsultatsiya olish" tugma
     await state.clear()
-    # 30 daqiqadan keyin followup xabar yuborish uchun schedule qilish
     schedule_start_followup(message.from_user.id)
     await message.answer(
         "Assalomu alaykum! Botga xush kelibsiz!\n\n"
         "Konsultatsiya olish uchun quyidagi tugmani bosing:",
         reply_markup=main_menu_kb(message.from_user.id),
     )
+    # Admin paneldan qo'shilgan start xabarlarini yuborish
+    for msg in get_start_messages():
+        try:
+            await send_bot_msg(message, msg["key"])
+        except Exception:
+            pass
 
 
 # --- 1. Ism ---
