@@ -132,39 +132,51 @@ def update_consultation(telegram_id: int, date_label: str, time_slot: str):
 
 
 def migrate_existing_to_sheets():
-    """Mavjud userlarni bir martalik Google Sheets ga yozish (deploy da)."""
+    """Mavjud userlarni Google Sheets ga sinxronlash (deploy da).
+    Sheet dagi telegram_id larni tekshirib, yo'qlarini qo'shadi."""
     worksheet = _get_worksheet()
     if worksheet is None:
         return
 
     try:
-        all_values = worksheet.get_all_values()
-        # Agar 2+ qator bo'lsa — allaqachon migrate qilingan
-        if len(all_values) > 1:
-            log.info("Google Sheets: ma'lumotlar allaqachon mavjud, migrate skip")
-            return
-
         from db import get_all_users_with_survey
         users = get_all_users_with_survey()
         if not users:
             return
 
+        # Sheet dagi mavjud telegram_id larni olish
+        all_values = worksheet.get_all_values()
+        existing_ids = set()
+        if len(all_values) > 1:
+            tid_col = HEADERS.index("Telegram ID")
+            for row in all_values[1:]:
+                if len(row) > tid_col and row[tid_col]:
+                    existing_ids.add(row[tid_col].strip())
+
+        # Faqat sheet da yo'q userlarni qo'shish
+        next_num = len(all_values)  # headers + mavjud qatorlar
         rows = []
-        for i, u in enumerate(users, 1):
+        for u in users:
+            tid = str(u.get("telegram_id", ""))
+            if tid in existing_ids:
+                continue
+            next_num += 1
             rows.append([
-                i,
+                next_num - 1,
                 u.get("full_name", ""),
                 u.get("age") or "",
                 u.get("phone", ""),
                 u.get("goal") or u.get("exam_goal") or "",
                 u.get("video_watched", ""),
                 u.get("preferred_time") or "",
-                str(u.get("telegram_id", "")),
+                tid,
                 u.get("created_at", ""),
             ])
 
         if rows:
             worksheet.append_rows(rows, value_input_option="USER_ENTERED")
-            log.info("Google Sheets: %d ta mavjud user migrate qilindi", len(rows))
+            log.info("Google Sheets: %d ta yangi user qo'shildi", len(rows))
+        else:
+            log.info("Google Sheets: barcha userlar allaqachon mavjud")
     except Exception as e:
         log.error("Google Sheets migrate xatosi: %s", e)
