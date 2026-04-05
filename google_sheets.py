@@ -43,7 +43,15 @@ def _get_client() -> gspread.Client | None:
             _client = gspread.authorize(creds)
             return _client
 
-        # 2) Fallback: lokal fayl
+        # 2) Env variable dan to'g'ridan-to'g'ri JSON
+        creds_raw = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON", "")
+        if creds_raw:
+            info = json.loads(creds_raw)
+            creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+            _client = gspread.authorize(creds)
+            return _client
+
+        # 3) Fallback: lokal fayl
         creds_path = Path("credentials.json")
         if creds_path.exists():
             creds = Credentials.from_service_account_file(str(creds_path), scopes=SCOPES)
