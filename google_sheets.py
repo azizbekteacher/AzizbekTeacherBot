@@ -1,5 +1,6 @@
 """Google Sheets integratsiyasi — ro'yxatdan o'tgan foydalanuvchilar va konsultatsiya ma'lumotlari."""
 
+import base64
 import json
 import logging
 import os
@@ -33,9 +34,10 @@ def _get_client() -> gspread.Client | None:
         return _client
 
     try:
-        # 1) Env variable dan JSON
-        creds_json = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON", "")
-        if creds_json:
+        # 1) Env variable dan base64 kodlangan JSON
+        creds_b64 = os.getenv("GOOGLE_SHEETS_CREDENTIALS_B64", "")
+        if creds_b64:
+            creds_json = base64.b64decode(creds_b64).decode("utf-8")
             info = json.loads(creds_json)
             creds = Credentials.from_service_account_info(info, scopes=SCOPES)
             _client = gspread.authorize(creds)
