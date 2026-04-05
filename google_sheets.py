@@ -20,7 +20,7 @@ SCOPES = [
 ]
 
 HEADERS = [
-    "No", "Ism (Telegram)", "Yosh", "Telefon", "Maqsad/Natija",
+    "No", "Ism (Telegram)", "Telefon", "Maqsad/Natija",
     "Video ko'rganmi", "Qulay vaqt", "Telegram ID", "Sana",
 ]
 
@@ -104,7 +104,6 @@ def append_registration(data: dict):
         row = [
             row_number,
             data.get("full_name", ""),
-            data.get("age", ""),
             data.get("phone", ""),
             data.get("goal", ""),
             data.get("video_watched", ""),
@@ -125,7 +124,7 @@ def update_consultation(telegram_id: int, date_label: str, time_slot: str):
         return
 
     try:
-        cell = worksheet.find(str(telegram_id), in_column=8)
+        cell = worksheet.find(str(telegram_id), in_column=7)
         if cell is None:
             log.warning("Google Sheets: telegram_id=%s topilmadi", telegram_id)
             return
@@ -133,7 +132,7 @@ def update_consultation(telegram_id: int, date_label: str, time_slot: str):
         # Sana ustuniga konsultatsiya ma'lumotini qo'shish
         current = worksheet.cell(cell.row, 9).value or ""
         note = f"{current} | Konsult: {date_label} {time_slot}" if current else f"Konsult: {date_label} {time_slot}"
-        worksheet.update_cell(cell.row, 9, note)
+        worksheet.update_cell(cell.row, 8, note)
         log.info("Google Sheets: konsultatsiya yangilandi — %s", telegram_id)
     except Exception as e:
         log.error("Google Sheets konsultatsiya yangilashda xato: %s", e)
@@ -172,7 +171,6 @@ def migrate_existing_to_sheets():
             rows.append([
                 next_num - 1,
                 u.get("full_name", ""),
-                u.get("age") or "",
                 u.get("phone", ""),
                 u.get("goal") or u.get("exam_goal") or "",
                 u.get("video_watched", ""),

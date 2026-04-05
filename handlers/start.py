@@ -85,11 +85,10 @@ def main_menu_kb(user_id: int) -> ReplyKeyboardMarkup | ReplyKeyboardRemove:
 
 class Registration(StatesGroup):
     waiting_for_name = State()       # 1 (welcome xabari bilan birga)
-    waiting_for_age = State()        # 2
-    waiting_for_phone = State()      # 3
-    waiting_for_goal = State()       # 4
-    waiting_for_video = State()      # 5 (Ha/Yo'q inline)
-    waiting_for_time = State()       # 6
+    waiting_for_phone = State()      # 2
+    waiting_for_goal = State()       # 3
+    waiting_for_video = State()      # 4 (Ha/Yo'q inline)
+    waiting_for_time = State()       # 5
 
 
 async def finish_registration(target, state: FSMContext, user_telegram_id: int):
@@ -102,7 +101,6 @@ async def finish_registration(target, state: FSMContext, user_telegram_id: int):
 
     user_id = save_user(user_telegram_id, full_name, phone)
     save_survey_answers(user_id, {
-        "age": data.get("age"),
         "goal": data.get("goal"),
         "video_watched": data.get("video_watched"),
         "preferred_time": data.get("preferred_time"),
@@ -114,7 +112,6 @@ async def finish_registration(target, state: FSMContext, user_telegram_id: int):
     # Google Sheets ga yozish
     append_registration({
         "full_name": full_name,
-        "age": data.get("age", ""),
         "phone": phone,
         "goal": data.get("goal", ""),
         "video_watched": data.get("video_watched", ""),
@@ -197,28 +194,13 @@ async def process_name(message: Message, state: FSMContext):
         return
 
     await state.update_data(full_name=full_name)
-    await state.set_state(Registration.waiting_for_age)
-    await send_bot_msg(message, "reg_age_prompt",
-                       reply_markup=ReplyKeyboardRemove(),
-                       send_companion=True)
-
-
-# --- 2. Yosh ---
-
-@router.message(Registration.waiting_for_age)
-async def process_age(message: Message, state: FSMContext):
-    if not message.text or not message.text.strip().isdigit():
-        await send_bot_msg(message, "reg_age_error")
-        return
-
-    await state.update_data(age=int(message.text.strip()))
     await state.set_state(Registration.waiting_for_phone)
     await send_bot_msg(message, "reg_phone_prompt",
                        reply_markup=ForceReply(input_field_placeholder="+998"),
                        send_companion=True)
 
 
-# --- 3. Telefon ---
+# --- 2. Telefon ---
 
 @router.message(Registration.waiting_for_phone)
 async def process_phone(message: Message, state: FSMContext):
