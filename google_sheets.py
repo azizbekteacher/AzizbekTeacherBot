@@ -70,10 +70,10 @@ def _get_worksheet() -> gspread.Worksheet | None:
         spreadsheet = client.open_by_key(GOOGLE_SHEETS_SPREADSHEET_ID)
         worksheet = spreadsheet.sheet1
 
-        # Headerlarni tekshirish — bo'sh bo'lsa yozish
+        # Headerlarni tekshirish — bo'sh bo'lsa 1-qatorga yozish
         first_row = worksheet.row_values(1)
-        if not first_row:
-            worksheet.append_row(HEADERS, value_input_option="USER_ENTERED")
+        if not first_row or first_row[0] != HEADERS[0]:
+            worksheet.update("A1", [HEADERS], value_input_option="USER_ENTERED")
 
         return worksheet
     except Exception as e:
